@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,6 +8,8 @@ namespace ParallelHttp.Core
 {
     public class ParallelHttpClient
     {
+        public delegate void ExceptionInHttpRequestEventHandler(object sender, ExceptionInHttpRequestEventArgs args);
+
         public delegate Task RequestCallback(ParallelHttpResponse response);
 
         private readonly HttpClient _httpClient;
@@ -30,6 +33,8 @@ namespace ParallelHttp.Core
 
             _backgroundWorker = Task.CompletedTask;
         }
+
+        public event ExceptionInHttpRequestEventHandler ExceptionInHttpRequest;
 
         public void Enqueue(params ParallelHttpRequest[] requests)
         {
@@ -59,6 +64,14 @@ namespace ParallelHttp.Core
                     };
 
                     await request.Callback.Invoke(response);
+                }
+                catch (Exception ex)
+                {
+                    ExceptionInHttpRequest?.Invoke(this, new ExceptionInHttpRequestEventArgs()
+                    {
+                        Reference = request.Reference,
+                        Exception = ex,
+                    });
                 }
                 finally
                 {
