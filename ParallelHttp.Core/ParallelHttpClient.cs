@@ -60,7 +60,7 @@ namespace ParallelHttp.Core
                         ResponseMessage = result
                     };
 
-                    await request.Callback.Invoke(response);
+                    await request.Callback.Invoke(response).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
