@@ -5,6 +5,8 @@ VisualStudioVersion = 12.0.0.0
 MinimumVisualStudioVersion = 10.0.0.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelHttp.Core", "ParallelHttp.Core\ParallelHttp.Core.csproj", "{D744D59B-E47D-47DE-A528-58F9544BDD7A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelHttp.Tests", "ParallelHttp.Tests\ParallelHttp.Tests.csproj", "{FF4B2493-2690-4D52-B22B-57030560A43F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{D744D59B-E47D-47DE-A528-58F9544BDD7A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D744D59B-E47D-47DE-A528-58F9544BDD7A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D744D59B-E47D-47DE-A528-58F9544BDD7A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FF4B2493-2690-4D52-B22B-57030560A43F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF4B2493-2690-4D52-B22B-57030560A43F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF4B2493-2690-4D52-B22B-57030560A43F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF4B2493-2690-4D52-B22B-57030560A43F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
