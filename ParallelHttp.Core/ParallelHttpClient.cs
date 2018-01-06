@@ -48,11 +48,11 @@ namespace ParallelHttp.Core
         {
             while (_requests.TryDequeue(out var request))
             {
-                await _sema.WaitAsync();
+                await _sema.WaitAsync().ConfigureAwait(false);
 
                 try
                 {
-                    var result = await _httpClient.SendAsync(request.Message, request.CancellationToken);
+                    var result = await _httpClient.SendAsync(request.Message, request.CancellationToken).ConfigureAwait(false);
 
                     var response = new ParallelHttpResponse
                     {
