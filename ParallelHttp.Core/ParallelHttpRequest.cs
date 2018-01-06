@@ -8,10 +8,10 @@ namespace ParallelHttp.Core
         public object Reference { get; internal set; }
         public HttpRequestMessage Message { get; internal set; }
         public ParallelHttpClient.RequestCallback Callback { get; internal set; }
-        public CancellationToken? CancellationToken { get; internal set; }
+        public CancellationToken CancellationToken { get; internal set; }
 
         public static ParallelHttpRequest From(HttpRequestMessage message, ParallelHttpClient.RequestCallback callback,
-            object reference = null, CancellationToken? cancellationToken = null)
+            object reference = null, CancellationToken cancellationToken = default)
         {
             return new ParallelHttpRequest
             {

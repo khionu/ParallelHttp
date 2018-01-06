@@ -50,13 +50,7 @@ namespace ParallelHttp.Core
 
                 try
                 {
-                    HttpResponseMessage result;
-
-                    if (request.CancellationToken.HasValue)
-                        result = await _httpClient.SendAsync(request.Message, request.CancellationToken.Value);
-                    else
-                        result = await _httpClient.SendAsync(request.Message);
-
+                    var result = await _httpClient.SendAsync(request.Message, request.CancellationToken);
 
                     var response = new ParallelHttpResponse
                     {
