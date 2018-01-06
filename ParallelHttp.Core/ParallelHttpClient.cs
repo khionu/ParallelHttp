@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.IO.Compression;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,14 +22,10 @@ namespace ParallelHttp.Core
 
         private Task _backgroundWorker;
 
-        public ParallelHttpClient(int maxParallelRequests)
-            : this(maxParallelRequests, new HttpClient())
+        public ParallelHttpClient(int maxParallelRequests, HttpClient httpClient = null)
         {
-        }
-
-        public ParallelHttpClient(int maxParallelRequests, HttpClient httpClient)
-        {
-            _httpClient = httpClient;
+            _httpClient = httpClient ?? new HttpClient();
+            
             _sema = new SemaphoreSlim(maxParallelRequests, maxParallelRequests);
 
             _backgroundWorker = Task.CompletedTask;
