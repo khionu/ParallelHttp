@@ -41,7 +41,7 @@ namespace ParallelHttp.Core
             if (!_backgroundWorker.IsCompleted)
                 return;
 
-            (_backgroundWorker = DequeueLoopAsync()).Start();
+            _backgroundWorker = DequeueLoopAsync();
         }
 
         private async Task DequeueLoopAsync()
