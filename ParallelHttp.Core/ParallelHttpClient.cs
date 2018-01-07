@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.IO.Compression;
+﻿using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,71 +7,54 @@ namespace ParallelHttp.Core
 {
     public class ParallelHttpClient
     {
-        public delegate void ExceptionInHttpRequestEventHandler(object sender, ExceptionInHttpRequestEventArgs args);
-
-        public delegate Task RequestCallback(ParallelHttpResponse response);
-
         private readonly HttpClient _httpClient;
 
-        private readonly ConcurrentQueue<ParallelHttpRequest> _requests
-            = new ConcurrentQueue<ParallelHttpRequest>();
-
-        private readonly SemaphoreSlim _sema;
-
-        private Task _backgroundWorker;
-
-        public ParallelHttpClient(int maxParallelRequests, HttpClient httpClient = null)
+        public ParallelHttpClient(HttpClient httpClient)
         {
-            _httpClient = httpClient ?? new HttpClient();
+            _httpClient = httpClient;
+        }
+
+        public Task<ParallelHttpResponse[]> AwaitRequests(int maxConcurrency, params ParallelHttpRequest[] requests)
+        {
+            var sema = new SemaphoreSlim(maxConcurrency, maxConcurrency);
             
-            _sema = new SemaphoreSlim(maxParallelRequests, maxParallelRequests);
-
-            _backgroundWorker = Task.CompletedTask;
-        }
-
-        public event ExceptionInHttpRequestEventHandler ExceptionInHttpRequest;
-
-        public void Enqueue(params ParallelHttpRequest[] requests)
-        {
-            foreach (var r in requests)
-                _requests.Enqueue(r);
-
-            if (!_backgroundWorker.IsCompleted)
-                return;
-
-            _backgroundWorker = DequeueLoopAsync();
-        }
-
-        private async Task DequeueLoopAsync()
-        {
-            while (_requests.TryDequeue(out var request))
+            return Task.WhenAll(requests.Select(async x =>
             {
-                await _sema.WaitAsync().ConfigureAwait(false);
+                return await SendAsync(sema, x).ConfigureAwait(false);
+            }));
+        }
 
-                try
-                {
-                    var result = await _httpClient.SendAsync(request.Message, request.CancellationToken).ConfigureAwait(false);
+        public Task FireRequests(int maxConcurrency, params ParallelHttpRequest[] requests)
+        {
+            var sema = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+            
+            return Task.WhenAll(requests.Select<ParallelHttpRequest, Task>(async x =>
+            {
+                await SendAsync(sema, x).ConfigureAwait(false);
+            }));
+        }
 
-                    var response = new ParallelHttpResponse
-                    {
-                        Reference = request.Reference,
-                        ResponseMessage = result
-                    };
+        internal async Task<ParallelHttpResponse> SendAsync(SemaphoreSlim semaphoreSlim, ParallelHttpRequest req)
+        {
+            await semaphoreSlim.WaitAsync().ConfigureAwait(false);
 
-                    await request.Callback.Invoke(response).ConfigureAwait(false);
-                }
-                catch (Exception ex)
+            try
+            {
+                var result = await _httpClient.SendAsync(req.Message, req.CancellationToken).ConfigureAwait(false);
+
+                var res = new ParallelHttpResponse()
                 {
-                    ExceptionInHttpRequest?.Invoke(this, new ExceptionInHttpRequestEventArgs()
-                    {
-                        Reference = request.Reference,
-                        Exception = ex,
-                    });
-                }
-                finally
-                {
-                    _sema.Release();
-                }
+                    Reference = req.Reference,
+                    ResponseMessage = result,
+                };
+                
+                req.Callback?.Invoke(res);
+
+                return res;
+            }
+            finally
+            {
+                semaphoreSlim.Release();
             }
         }
     }
