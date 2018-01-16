@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -31,24 +31,22 @@ namespace ParallelHttp.Tests
 
             var testRequest = new ParallelHttpRequest(testRequestMessage, Callback);
 
-            var mockHttpMessageHandler = new RichardSzalay.MockHttp.MockHttpMessageHandler();
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
                 
             mockHttpMessageHandler.When(HttpMethod.Get, UnitTestUrlString)
                 .Respond("application/json", "{ }");
 
             var mockHttpClient = mockHttpMessageHandler.ToHttpClient();
             
-            var testClient = new ParallelHttpClient(1, mockHttpClient);
+            var testClient = new ParallelHttpClient(mockHttpClient, 1);
 
             var exceptionHandled = false;
 
-            testClient.ExceptionInHttpRequest += (s, e) => { exceptionHandled = true; };
+            testClient.ExceptionInHttpRequest += (s, e) => { exceptionHandled = true; return Task.CompletedTask; };
             
             // Act
             
-            testClient.Enqueue(testRequest);
-
-            Task.Delay(500).GetAwaiter().GetResult();
+            testClient.AwaitRequests(testRequest).GetAwaiter().GetResult();
             
             // Assert
             
@@ -56,110 +54,63 @@ namespace ParallelHttp.Tests
         }
 
         [Fact]
-        public void OnFullLoad_SemaphoresHold()
+        public void OnLargeRequests_IsAsync()
         {
             // Arrange
-            
-            const int concurrency = 3;
-            
-            var blockingRequestMessage_first = new HttpRequestMessage()
-            {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri(UnitTestUrlString + "?timeout=4000"),
-            };
-            
-            var blockingRequestMessage_second = new HttpRequestMessage()
-            {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri(UnitTestUrlString + "?timeout=4050"),
-            };
-            
-            var sequence_zero = new HttpRequestMessage()
-            {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri(UnitTestUrlString + "?timeout=100"),
-            };
-            
-            var sequence_one = new HttpRequestMessage()
-            {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri(UnitTestUrlString + "?timeout=175"),
-            };
-            
-            var sequence_two = new HttpRequestMessage()
-            {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri(UnitTestUrlString + "?timeout=350"),
-            };
-            
-            var sequence_three = new HttpRequestMessage()
-            {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri(UnitTestUrlString + "?timeout=575"),
-            };
 
-            var returnOrder = new List<object>();
+            var requests = new List<ParallelHttpRequest>();
+            var responses = new List<int>();
 
-            Task Callback(ParallelHttpResponse res)
+            for (var i = 0; i < 8; i++)
             {
-                returnOrder.Add(res.Reference);
-                
-                return Task.CompletedTask;
-            };
-            
-            var requestSet = new ParallelHttpRequest[6];
-            
-            requestSet[0] = new ParallelHttpRequest(blockingRequestMessage_first, Callback);
-            requestSet[1] = new ParallelHttpRequest(blockingRequestMessage_second, Callback);
-            requestSet[2] = new ParallelHttpRequest(sequence_zero, Callback);
-            requestSet[3] = new ParallelHttpRequest(sequence_one, Callback);
-            requestSet[4] = new ParallelHttpRequest(sequence_two, Callback);
-            requestSet[5] = new ParallelHttpRequest(sequence_three, Callback);
-
-            var expectedOrder = new object[6];
-
-            expectedOrder[0] = requestSet[2].Reference;
-            expectedOrder[1] = requestSet[3].Reference;
-            expectedOrder[2] = requestSet[4].Reference;
-            expectedOrder[3] = requestSet[5].Reference;
-            expectedOrder[4] = requestSet[0].Reference;
-            expectedOrder[5] = requestSet[1].Reference;
-            
-            var mockHttpMessageHandler = new RichardSzalay.MockHttp.MockHttpMessageHandler();
-
-            mockHttpMessageHandler.When(HttpMethod.Get, UnitTestUrlString + "*")
-                .With(x =>
+                var httpReq = new HttpRequestMessage()
                 {
-                    var query = x.RequestUri.Query;
-                    if (!query.StartsWith("timeout="))
-                        return false;
-
-                    query = query.Replace("timeout=", "");
-                    if (!int.TryParse(query, out var timeout))
-                        return false;
-
-                    Task.Delay(timeout).GetAwaiter().GetResult();
-                    return true;
-                })
-                .Respond("application/json", "{ }");
+                    Method = HttpMethod.Get,
+                    RequestUri = new Uri(UnitTestUrlString + $"/{i}"),
+                };
+                
+                var parallelReq = new ParallelHttpRequest(httpReq, Callback, i);
+                
+                requests.Add(parallelReq);
+            }
             
-            var client = new ParallelHttpClient(3, mockHttpMessageHandler.ToHttpClient());
+            var mockHttpMessageHandler = new MockHttpMessageHandler();
+
+            mockHttpMessageHandler.When(UnitTestUrlString + '*')
+                .Respond(Response);
+            
+            var testClient = new ParallelHttpClient(mockHttpMessageHandler.ToHttpClient());
             
             // Act
-            
-            client.Enqueue(requestSet);
-            
-            Task.Delay(5000).GetAwaiter().GetResult();
+
+            testClient.AwaitRequests(3, requests.ToArray()).GetAwaiter().GetResult();
             
             // Assert
 
-            var i = 0;
+            var actual = responses.ToArray();
+
+            var shouldNotBe = responses.OrderBy(x => x).ToArray();
             
-            Assert.All(returnOrder, x =>
+            Assert.NotEqual(shouldNotBe, actual);
+            
+            // Misc
+
+            Task Callback(ParallelHttpResponse res)
             {
-                Assert.Same(x, expectedOrder[i]);
-                i++;
-            });
+                responses.Add((int)res.Reference);
+                return Task.CompletedTask;
+            }
+            
+            async Task<HttpResponseMessage> Response(HttpRequestMessage msg)
+            {
+                var reference = int.Parse(msg.RequestUri.PathAndQuery.Last().ToString()); 
+
+                await Task.Delay(reference % 3 == 0 ? 4000 : 200);
+                
+                responses.Add(reference);
+                
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
         }
     }
 }
