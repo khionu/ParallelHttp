@@ -11,6 +11,8 @@ namespace ParallelHttp.Core
         private readonly SemaphoreSlim _globalSema;
         private readonly HttpClient _httpClient;
 
+        public event Func<object, ExceptionInHttpRequestEventArgs, Task> ExceptionInHttpRequest;
+
         public ParallelHttpClient(HttpClient httpClient, int maxGlobalConcurrency = 0)
         {
             if (maxGlobalConcurrency < 0) throw new ArgumentOutOfRangeException(nameof(maxGlobalConcurrency));
@@ -57,11 +59,23 @@ namespace ParallelHttp.Core
 
                 return res;
             }
+            catch (Exception ex)
+            {
+                var args = new ExceptionInHttpRequestEventArgs()
+                {
+                    Exception = ex,
+                    Reference = req.Reference,
+                };
+
+                if (ExceptionInHttpRequest != null) await ExceptionInHttpRequest(this, args).ConfigureAwait(false);
+            }
             finally
             {
                 semaphoreSlim?.Release();
                 _globalSema?.Release();
             }
+
+            return null;
         }
     }
 }
