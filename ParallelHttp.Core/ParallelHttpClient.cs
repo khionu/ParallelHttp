@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,47 +15,45 @@ namespace ParallelHttp.Core
             _httpClient = httpClient;
         }
 
+        public Task<ParallelHttpResponse[]> AwaitRequests(params ParallelHttpRequest[] requests)
+            => AwaitRequests(-1, requests);
         public Task<ParallelHttpResponse[]> AwaitRequests(int maxConcurrency, params ParallelHttpRequest[] requests)
         {
-            var sema = new SemaphoreSlim(maxConcurrency, maxConcurrency);
-            
-            return Task.WhenAll(requests.Select(async x =>
-            {
-                return await SendAsync(sema, x).ConfigureAwait(false);
-            }));
+            var sema = maxConcurrency > -1 ? new SemaphoreSlim(maxConcurrency, maxConcurrency) : null;
+
+            return Task.WhenAll(requests.Select(async x => await SendAsync(sema, x).ConfigureAwait(false)));
         }
 
+        public Task FireRequests(params ParallelHttpRequest[] requests)
+            => FireRequests(-1, requests);
         public Task FireRequests(int maxConcurrency, params ParallelHttpRequest[] requests)
         {
-            var sema = new SemaphoreSlim(maxConcurrency, maxConcurrency);
-            
-            return Task.WhenAll(requests.Select<ParallelHttpRequest, Task>(async x =>
-            {
-                await SendAsync(sema, x).ConfigureAwait(false);
-            }));
+            var sema = maxConcurrency > -1 ? new SemaphoreSlim(maxConcurrency, maxConcurrency) : null;
+
+            return Task.WhenAll(requests.Select(async x => { await SendAsync(sema, x).ConfigureAwait(false); }));
         }
 
         internal async Task<ParallelHttpResponse> SendAsync(SemaphoreSlim semaphoreSlim, ParallelHttpRequest req)
         {
-            await semaphoreSlim.WaitAsync().ConfigureAwait(false);
+            if (semaphoreSlim != null) await semaphoreSlim.WaitAsync().ConfigureAwait(false);
 
             try
             {
                 var result = await _httpClient.SendAsync(req.Message, req.CancellationToken).ConfigureAwait(false);
 
-                var res = new ParallelHttpResponse()
+                var res = new ParallelHttpResponse
                 {
                     Reference = req.Reference,
-                    ResponseMessage = result,
+                    ResponseMessage = result
                 };
-                
+
                 req.Callback?.Invoke(res);
 
                 return res;
             }
             finally
             {
-                semaphoreSlim.Release();
+                semaphoreSlim?.Release();
             }
         }
     }
