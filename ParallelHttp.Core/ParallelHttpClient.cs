@@ -8,11 +8,16 @@ namespace ParallelHttp.Core
 {
     public class ParallelHttpClient
     {
+        private readonly SemaphoreSlim _globalSema;
         private readonly HttpClient _httpClient;
 
-        public ParallelHttpClient(HttpClient httpClient)
+        public ParallelHttpClient(HttpClient httpClient, int maxGlobalConcurrency = 0)
         {
+            if (maxGlobalConcurrency < 0) throw new ArgumentOutOfRangeException(nameof(maxGlobalConcurrency));
+            
             _httpClient = httpClient;
+
+            if (maxGlobalConcurrency != 0) _globalSema = new SemaphoreSlim(maxGlobalConcurrency, maxGlobalConcurrency);
         }
 
         public Task<ParallelHttpResponse[]> AwaitRequests(params ParallelHttpRequest[] requests)
@@ -36,6 +41,7 @@ namespace ParallelHttp.Core
         internal async Task<ParallelHttpResponse> SendAsync(SemaphoreSlim semaphoreSlim, ParallelHttpRequest req)
         {
             if (semaphoreSlim != null) await semaphoreSlim.WaitAsync().ConfigureAwait(false);
+            if (_globalSema != null) await _globalSema.WaitAsync().ConfigureAwait(false);
 
             try
             {
@@ -54,6 +60,7 @@ namespace ParallelHttp.Core
             finally
             {
                 semaphoreSlim?.Release();
+                _globalSema?.Release();
             }
         }
     }
