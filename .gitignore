@@ -1,3 +1,9 @@
 bin/
 obj/
 \.idea/
+
+*.nuspec
+
+ParallelHttp\.sln\.DotSettings\.user
+
+*.DotSettings
